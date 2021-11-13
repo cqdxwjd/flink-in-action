@@ -30,6 +30,7 @@ object SocketWindowWordCountScala {
     // 执行任务
     env.execute("Socket window count")
   }
+
+  case class WordWithCount(word: String, count: Long)
 }
 
-case class WordWithCount(word: String, count: Long)
