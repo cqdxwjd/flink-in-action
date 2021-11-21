@@ -3,7 +3,7 @@ package cqdxwjd.flink.streaming
 import cqdxwjd.flink.streaming.SocketWindowWordCountScala.WordWithCount
 import org.apache.flink.api.common.serialization.SimpleStringSchema
 import org.apache.flink.streaming.api.scala.StreamExecutionEnvironment
-import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer011
+import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer
 import org.apache.flink.streaming.api.windowing.time.Time
 
 import java.util.Properties
@@ -25,7 +25,7 @@ object WordCountKafkaInStdOut {
 
     // source
     import org.apache.flink.api.scala._
-    val consumer = new FlinkKafkaConsumer011[String](inputTopic, new SimpleStringSchema(), properties)
+    val consumer = new FlinkKafkaConsumer[String](inputTopic, new SimpleStringSchema(), properties)
     val stream = env.addSource(consumer)
 
     // transformation
