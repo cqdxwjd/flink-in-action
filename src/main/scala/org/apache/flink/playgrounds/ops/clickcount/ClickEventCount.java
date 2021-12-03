@@ -53,88 +53,87 @@ import java.util.concurrent.TimeUnit;
  * * "--input-topic": the name of the Kafka Topic to consume {@link ClickEvent}s from
  * * "--output-topic": the name of the Kafka Topic to produce {@link ClickEventStatistics} to
  * * "--bootstrap.servers": comma-separated list of Kafka brokers
- *
  */
 public class ClickEventCount {
 
-	public static final String CHECKPOINTING_OPTION = "checkpointing";
-	public static final String EVENT_TIME_OPTION = "event-time";
-	public static final String BACKPRESSURE_OPTION = "backpressure";
-	public static final String OPERATOR_CHAINING_OPTION = "chaining";
+    public static final String CHECKPOINTING_OPTION = "checkpointing";
+    public static final String EVENT_TIME_OPTION = "event-time";
+    public static final String BACKPRESSURE_OPTION = "backpressure";
+    public static final String OPERATOR_CHAINING_OPTION = "chaining";
 
-	public static final Time WINDOW_SIZE = Time.of(15, TimeUnit.SECONDS);
+    public static final Time WINDOW_SIZE = Time.of(15, TimeUnit.SECONDS);
 
-	public static void main(String[] args) throws Exception {
-		final ParameterTool params = ParameterTool.fromArgs(args);
+    public static void main(String[] args) throws Exception {
+        final ParameterTool params = ParameterTool.fromArgs(args);
 
-		final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+        final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
-		configureEnvironment(params, env);
+        configureEnvironment(params, env);
 
-		boolean inflictBackpressure = params.has(BACKPRESSURE_OPTION);
+        boolean inflictBackpressure = params.has(BACKPRESSURE_OPTION);
 
-		String inputTopic = params.get("input-topic", "input");
-		String outputTopic = params.get("output-topic", "output");
-		String brokers = params.get("bootstrap.servers", "localhost:9092");
-		Properties kafkaProps = new Properties();
-		kafkaProps.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokers);
-		kafkaProps.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "click-event-count");
+        String inputTopic = params.get("input-topic", "input");
+        String outputTopic = params.get("output-topic", "output");
+        String brokers = params.get("bootstrap.servers", "localhost:9092");
+        Properties kafkaProps = new Properties();
+        kafkaProps.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokers);
+        kafkaProps.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "click-event-count");
 
-		DataStream<ClickEvent> clicks =
-				env.addSource(new FlinkKafkaConsumer<>(inputTopic, new ClickEventDeserializationSchema(), kafkaProps))
-			.name("ClickEvent Source")
-			.assignTimestampsAndWatermarks(new BoundedOutOfOrdernessTimestampExtractor<ClickEvent>(Time.of(200, TimeUnit.MILLISECONDS)) {
-				@Override
-				public long extractTimestamp(final ClickEvent element) {
-					return element.getTimestamp().getTime();
-				}
-			});
+        DataStream<ClickEvent> clicks =
+                env.addSource(new FlinkKafkaConsumer<>(inputTopic, new ClickEventDeserializationSchema(), kafkaProps))
+                        .name("ClickEvent Source")
+                        .assignTimestampsAndWatermarks(new BoundedOutOfOrdernessTimestampExtractor<ClickEvent>(Time.of(200, TimeUnit.MILLISECONDS)) {
+                            @Override
+                            public long extractTimestamp(final ClickEvent element) {
+                                return element.getTimestamp().getTime();
+                            }
+                        });
 
-		if (inflictBackpressure) {
-			// Force a network shuffle so that the backpressure will affect the buffer pools
-			clicks = clicks
-				.keyBy(ClickEvent::getPage)
-				.map(new BackpressureMap())
-				.name("Backpressure");
-		}
+        if (inflictBackpressure) {
+            // Force a network shuffle so that the backpressure will affect the buffer pools
+            clicks = clicks
+                    .keyBy(ClickEvent::getPage)
+                    .map(new BackpressureMap())
+                    .name("Backpressure");
+        }
 
-		DataStream<ClickEventStatistics> statistics = clicks
-			.keyBy(ClickEvent::getPage)
-			.timeWindow(WINDOW_SIZE)
-			.aggregate(new CountingAggregator(),
-				new ClickEventStatisticsCollector())
-			.name("ClickEvent Counter");
+        DataStream<ClickEventStatistics> statistics = clicks
+                .keyBy(ClickEvent::getPage)
+                .timeWindow(WINDOW_SIZE)
+                .aggregate(new CountingAggregator(),
+                        new ClickEventStatisticsCollector())
+                .name("ClickEvent Counter");
 
-		statistics
-			.addSink(new FlinkKafkaProducer<>(
-				outputTopic,
-				new ClickEventStatisticsSerializationSchema(outputTopic),
-				kafkaProps,
-				FlinkKafkaProducer.Semantic.AT_LEAST_ONCE))
-			.name("ClickEventStatistics Sink");
+        statistics
+                .addSink(new FlinkKafkaProducer<>(
+                        outputTopic,
+                        new ClickEventStatisticsSerializationSchema(outputTopic),
+                        kafkaProps,
+                        FlinkKafkaProducer.Semantic.AT_LEAST_ONCE))
+                .name("ClickEventStatistics Sink");
 
-		env.execute("Click Event Count");
-	}
+        env.execute("Click Event Count");
+    }
 
-	private static void configureEnvironment(
-			final ParameterTool params,
-			final StreamExecutionEnvironment env) {
+    private static void configureEnvironment(
+            final ParameterTool params,
+            final StreamExecutionEnvironment env) {
 
-		boolean checkpointingEnabled = params.has(CHECKPOINTING_OPTION);
-		boolean eventTimeSemantics = params.has(EVENT_TIME_OPTION);
-		boolean enableChaining = params.has(OPERATOR_CHAINING_OPTION);
+        boolean checkpointingEnabled = params.has(CHECKPOINTING_OPTION);
+        boolean eventTimeSemantics = params.has(EVENT_TIME_OPTION);
+        boolean enableChaining = params.has(OPERATOR_CHAINING_OPTION);
 
-		if (checkpointingEnabled) {
-			env.enableCheckpointing(1000);
-		}
+        if (checkpointingEnabled) {
+            env.enableCheckpointing(1000);
+        }
 
-		if (eventTimeSemantics) {
-			env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
-		}
+        if (eventTimeSemantics) {
+            env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
+        }
 
-		if(!enableChaining){
-			//disabling Operator chaining to make it easier to follow the Job in the WebUI
-			env.disableOperatorChaining();
-		}
-	}
+        if (!enableChaining) {
+            //disabling Operator chaining to make it easier to follow the Job in the WebUI
+            env.disableOperatorChaining();
+        }
+    }
 }
