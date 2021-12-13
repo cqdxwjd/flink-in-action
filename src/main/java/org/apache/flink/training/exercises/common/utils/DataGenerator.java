@@ -18,6 +18,8 @@
 
 package org.apache.flink.training.exercises.common.utils;
 
+import org.apache.flink.training.exercises.common.datatypes.TaxiRide;
+
 import java.time.Instant;
 import java.util.Random;
 
@@ -198,5 +200,6 @@ public class DataGenerator {
     public static void main(String[] args) {
         DataGenerator g = new DataGenerator(1);
         System.out.println(g.driverId());
+        System.out.println(new TaxiRide(1, true));
     }
 }
